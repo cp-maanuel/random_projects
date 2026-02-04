@@ -47,10 +47,9 @@ let gameState = {
     timeSinceLastSpawn: 0,
     boostActive: false, boostTimer: 0, boostDuration: 600,
     spawnCooldown: 0,
-    // Booster Rarity Logic
-    boostersSpawnedInLevel: 0,
-    maxBoostersPerLevel: 3,
-    nextGuaranteedBoostScore: 500 // Ensures at least one mid-level
+    // Refined Spawning Logic
+    midLevelBoostSpawned: false,
+    endLevelBoostSpawned: false
 };
 
 const player = {
@@ -78,8 +77,8 @@ function resetGame() {
     gameState.score = 0; gameState.speed = 8; gameState.baseSpeed = 8;
     gameState.lastMilestone = 0; gameState.boostActive = false;
     gameState.boostTimer = 0; gameState.spawnCooldown = 0;
-    gameState.boostersSpawnedInLevel = 0;
-    gameState.nextGuaranteedBoostScore = 500;
+    gameState.midLevelBoostSpawned = false;
+    gameState.endLevelBoostSpawned = false;
     obstacles = []; boosts = []; particles = []; trail = [];
     initPlayer();
 }
@@ -180,9 +179,9 @@ function update() {
     if (currentMilestone > gameState.lastMilestone) {
         gameState.baseSpeed += 2.0; 
         gameState.lastMilestone = currentMilestone;
-        // Reset Level Rarity Counters
-        gameState.boostersSpawnedInLevel = 0;
-        gameState.nextGuaranteedBoostScore = (currentMilestone * 1000) + 500;
+        // Reset flags for the new level
+        gameState.midLevelBoostSpawned = false;
+        gameState.endLevelBoostSpawned = false;
     }
 
     gameState.speed += (gameState.baseSpeed - gameState.speed) * 0.1;
@@ -221,15 +220,22 @@ function update() {
     const isSafetyOn = isFlashing || gameState.spawnCooldown > 0;
 
     if (gameState.timeSinceLastSpawn > spawnDelay) {
-        // Rarity Logic: 
-        // 1. Must have spawned less than 3 this level
-        // 2. Chance is lower (0.02) OR we reached the "Guaranteed" score point for this level
-        let canSpawnBoost = gameState.boostersSpawnedInLevel < gameState.maxBoostersPerLevel;
-        let rollForBoost = Math.random() < 0.02 || (gameState.score >= gameState.nextGuaranteedBoostScore && gameState.boostersSpawnedInLevel === 0);
+        let levelProgress = gameState.score % 1000;
+        let shouldSpawnBoost = false;
 
-        if (canSpawnBoost && rollForBoost && !gameState.boostActive) {
+        // Condition 1: Middle of Level (approx 500 points in)
+        if (levelProgress >= 500 && levelProgress < 550 && !gameState.midLevelBoostSpawned) {
+            shouldSpawnBoost = true;
+            gameState.midLevelBoostSpawned = true;
+        }
+        // Condition 2: End of Level (approx 950 points in)
+        else if (levelProgress >= 950 && !gameState.endLevelBoostSpawned) {
+            shouldSpawnBoost = true;
+            gameState.endLevelBoostSpawned = true;
+        }
+
+        if (shouldSpawnBoost && !gameState.boostActive) {
             boosts.push({ x: lanePositions[Math.floor(Math.random()*3)], y: -100 });
-            gameState.boostersSpawnedInLevel++;
             gameState.timeSinceLastSpawn = 0;
         } else if (!isSafetyOn) { 
             const freeLane = Math.floor(Math.random() * 3);
@@ -242,6 +248,7 @@ function update() {
         }
     }
 
+    // Move items
     for (let i = boosts.length - 1; i >= 0; i--) {
         boosts[i].y += gameState.speed;
         if (Math.hypot(player.x - boosts[i].x, (player.y - 20) - boosts[i].y) < 40) {
