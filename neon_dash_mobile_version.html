@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+\<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -11,35 +11,41 @@
     
     .mobile-controls {
         position: absolute;
-        bottom: 30px;
+        bottom: 40px;
         width: 100%;
         display: flex;
         justify-content: space-between;
         padding: 0 40px;
         box-sizing: border-box;
         pointer-events: none;
+        transition: opacity 0.4s ease; /* Smooth fade for UI */
     }
+    
     .btn {
-        width: 80px;
-        height: 80px;
-        border: 4px solid #00ffff;
-        border-radius: 20px;
+        width: 75px;
+        height: 75px;
+        border: 3px solid #ffffff; /* Changed to White */
+        border-radius: 50%; /* Circular for a smoother look */
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #00ffff;
-        font-size: 32px;
-        background: rgba(0, 255, 255, 0.15);
-        box-shadow: 0 0 20px #00ffff, inset 0 0 10px #00ffff;
+        color: #ffffff;
+        font-size: 28px;
+        background: rgba(255, 255, 255, 0.1);
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.3), inset 0 0 10px rgba(255, 255, 255, 0.2);
         pointer-events: auto;
-        transition: transform 0.05s;
+        transition: transform 0.1s, background 0.2s;
     }
-    .btn:active { transform: scale(0.9); background: rgba(0, 255, 255, 0.4); }
+    
+    .btn:active { transform: scale(0.85); background: rgba(255, 255, 255, 0.4); }
+    
+    /* Hidden state for Loading and Crash screens */
+    .ui-hidden { opacity: 0; pointer-events: none; }
 </style>
 </head>
 <body>
 
-<div class="mobile-controls" id="ui-controls">
+<div class="mobile-controls ui-hidden" id="ui-controls">
     <div class="btn" id="left-btn">◀</div>
     <div class="btn" id="right-btn">▶</div>
 </div>
@@ -49,12 +55,13 @@
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const uiLayer = document.getElementById("ui-controls");
 let lanePositions = [];
 
 const COLORS = {
     player: "#00ffff", 
     obstacle: "#ff0055", 
-    track: "rgba(0, 255, 255, 0.1)",
+    track: "rgba(0, 255, 255, 0.08)",
     gold: "#FFD700",
     overlay: "rgba(0, 0, 0, 0.85)"
 };
@@ -63,7 +70,7 @@ function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     const center = canvas.width / 2;
-    const spacing = Math.min(canvas.width / 3.5, 130);
+    const spacing = Math.min(canvas.width / 3.2, 140);
     lanePositions = [center - spacing, center, center + spacing];
 }
 window.addEventListener("resize", resize);
@@ -77,7 +84,7 @@ let gameState = {
     deathTimer: 0,
     score: 0,
     highScore: parseInt(localStorage.getItem('neonDashHigh')) || 0,
-    speed: 6.5, // Slightly slower start
+    speed: 6.5,
     baseSpeed: 6.5,
     timeSinceLastSpawn: 0
 };
@@ -105,25 +112,33 @@ function createExplosion(x, y, color, count) {
     for (let i = 0; i < count; i++) {
         particles.push({
             x: x, y: y,
-            vx: (Math.random() - 0.5) * 18,
-            vy: (Math.random() - 0.5) * 18,
+            vx: (Math.random() - 0.5) * 20,
+            vy: (Math.random() - 0.5) * 20,
             life: 1.0, color: color,
-            size: Math.random() * 6 + 3
+            size: Math.random() * 5 + 2
         });
     }
 }
 
 function resetGame() {
-    gameState.started = true; gameState.gameOver = false;
-    gameState.showGameOverUI = false; gameState.deathTimer = 0; gameState.uiTimer = 0;
-    gameState.score = 0; gameState.speed = 6.5; gameState.baseSpeed = 6.5;
-    obstacles = []; particles = []; dustTrail = [];
+    gameState.started = true; 
+    gameState.gameOver = false;
+    gameState.showGameOverUI = false; 
+    gameState.deathTimer = 0; 
+    gameState.uiTimer = 0;
+    gameState.score = 0; 
+    gameState.speed = 6.5; 
+    gameState.baseSpeed = 6.5;
+    obstacles = []; 
+    particles = []; 
+    dustTrail = [];
     initPlayer();
+    uiLayer.classList.remove('ui-hidden'); // Show arrows
 }
 
 function moveLeft() { if (player.lane > 0 && !gameState.gameOver) { player.lane--; player.targetX = lanePositions[player.lane]; } }
 function moveRight() { if (player.lane < 2 && !gameState.gameOver) { player.lane++; player.targetX = lanePositions[player.lane]; } }
-function jump() { if (!player.isJumping && !gameState.gameOver) { player.vy = -18; player.isJumping = true; } }
+function jump() { if (!player.isJumping && !gameState.gameOver) { player.vy = -17; player.isJumping = true; } }
 
 document.getElementById("left-btn").addEventListener("touchstart", (e) => { e.preventDefault(); moveLeft(); });
 document.getElementById("right-btn").addEventListener("touchstart", (e) => { e.preventDefault(); moveRight(); });
@@ -135,13 +150,15 @@ canvas.addEventListener("touchstart", (e) => {
 
 function drawNeonRect(x, y, w, h, color, glow, isPlayer = false) {
     ctx.save();
-    ctx.shadowBlur = glow + (isPlayer ? Math.sin(Date.now()/100)*8 : 0);
+    ctx.shadowBlur = glow + (isPlayer ? Math.sin(Date.now()/120)*10 : 0);
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     ctx.fillRect(x - w/2, y - h, w, h);
+    
+    // Glossy Polish
     ctx.fillStyle = "#fff";
-    ctx.globalAlpha = 0.3;
-    ctx.fillRect(x - w/2 + 5, y - h + 5, w - 10, h - 10);
+    ctx.globalAlpha = 0.25;
+    ctx.fillRect(x - w/2 + 4, y - h + 4, w - 8, h/2.5);
     ctx.restore();
 }
 
@@ -162,64 +179,61 @@ function update() {
     for (let i = particles.length - 1; i >= 0; i--) {
         particles[i].x += particles[i].vx;
         particles[i].y += particles[i].vy;
-        particles[i].life -= 0.02;
+        particles[i].life -= 0.025;
         if (particles[i].life <= 0) particles.splice(i, 1);
     }
 
     if (!gameState.started) return;
 
     if (gameState.gameOver) {
+        if (!uiLayer.classList.contains('ui-hidden')) uiLayer.classList.add('ui-hidden'); // Hide arrows on crash
         gameState.deathTimer++;
-        if (gameState.deathTimer > 40) {
+        if (gameState.deathTimer > 45) {
             gameState.showGameOverUI = true;
-            if (gameState.uiTimer < 1) gameState.uiTimer += 0.07;
+            if (gameState.uiTimer < 1) gameState.uiTimer += 0.08;
         }
         return;
     }
 
-    gameState.score += 0.2; // Slower score build up
-    gameState.baseSpeed += 0.0008; // Decreased speed scaling
+    gameState.score += 0.2;
+    gameState.baseSpeed += 0.0007; 
     gameState.speed = gameState.baseSpeed;
 
-    player.x += (player.targetX - player.x) * 0.25;
-    player.vy += 0.95;
+    // Smoother movement interpolation
+    player.x += (player.targetX - player.x) * 0.18; 
+    player.vy += 0.85; // Lower gravity for smoother jumps
     player.y += player.vy;
     if (player.y > player.groundY) { player.y = player.groundY; player.vy = 0; player.isJumping = false; }
 
     if (!player.isJumping) {
         dustTrail.push({
-            x: player.x + (Math.random() - 0.5) * 20,
+            x: player.x + (Math.random() - 0.5) * 15,
             y: player.y,
-            size: Math.random() * 6 + 2,
-            life: 1.0
+            size: Math.random() * 5 + 1,
+            life: 0.8
         });
     }
 
     gameState.timeSinceLastSpawn++;
-    // Increased spawn gap for easier gameplay
-    if (gameState.timeSinceLastSpawn > Math.max(15, 40 - gameState.baseSpeed)) {
-        
-        // DIFFICULTY ADJUSTMENT: 60% chance for 1 block, 40% chance for 2 blocks
-        const spawnDouble = Math.random() > 0.6;
-        
+    if (gameState.timeSinceLastSpawn > Math.max(18, 45 - gameState.baseSpeed)) {
+        const spawnDouble = Math.random() > 0.65;
         if (spawnDouble) {
             const safeLane = Math.floor(Math.random() * 3);
             [0, 1, 2].forEach(l => { if (l !== safeLane) obstacles.push({ x: lanePositions[l], y: -100 }); });
         } else {
-            const dangerLane = Math.floor(Math.random() * 3);
-            obstacles.push({ x: lanePositions[dangerLane], y: -100 });
+            obstacles.push({ x: lanePositions[Math.floor(Math.random() * 3)], y: -100 });
         }
-        
         gameState.timeSinceLastSpawn = 0;
     }
 
     for (let i = obstacles.length - 1; i >= 0; i--) {
         let o = obstacles[i];
         o.y += gameState.speed;
-        if (Math.abs(player.x - o.x) < 35 && Math.abs(player.y - 20 - o.y) < 35) {
+        // Collision check
+        if (Math.abs(player.x - o.x) < 32 && Math.abs((player.y - 20) - o.y) < 32) {
             gameState.gameOver = true;
-            createExplosion(player.x, player.y - 20, COLORS.player, 40);
-            createExplosion(o.x, o.y, COLORS.obstacle, 20);
+            createExplosion(player.x, player.y - 20, COLORS.player, 35);
+            createExplosion(o.x, o.y, COLORS.obstacle, 15);
             if (gameState.score > gameState.highScore) {
                 gameState.highScore = Math.floor(gameState.score);
                 localStorage.setItem('neonDashHigh', gameState.highScore);
@@ -228,8 +242,8 @@ function update() {
     }
 
     for (let i = dustTrail.length - 1; i >= 0; i--) {
-        dustTrail[i].y += gameState.speed * 0.5;
-        dustTrail[i].life -= 0.02;
+        dustTrail[i].y += gameState.speed * 0.4;
+        dustTrail[i].life -= 0.03;
         if (dustTrail[i].life <= 0) dustTrail.splice(i, 1);
     }
 }
@@ -238,27 +252,27 @@ function loop() {
     ctx.fillStyle = "#010101";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Track
     ctx.strokeStyle = COLORS.track;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     lanePositions.forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); });
 
+    // Dust
     dustTrail.forEach(d => {
-        ctx.globalAlpha = d.life * 0.4;
+        ctx.globalAlpha = d.life * 0.3;
         ctx.fillStyle = COLORS.player;
         ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
     });
     ctx.globalAlpha = 1;
 
     if (!gameState.gameOver) {
-        drawNeonRect(player.x, player.y, 40, 40, COLORS.player, 35, true);
+        drawNeonRect(player.x, player.y, 40, 40, COLORS.player, 40, true);
     }
     
-    obstacles.forEach(o => drawNeonRect(o.x, o.y, 45, 45, COLORS.obstacle, 20));
+    obstacles.forEach(o => drawNeonRect(o.x, o.y, 45, 45, COLORS.obstacle, 25));
     
     particles.forEach(p => {
         ctx.globalAlpha = p.life;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = p.color;
         ctx.fillStyle = p.color;
         ctx.fillRect(p.x, p.y, p.size, p.size);
     });
@@ -266,21 +280,21 @@ function loop() {
 
     if (!gameState.started) {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
-        drawText("NEON DASH", 40, COLORS.player, -20, 25);
-        drawText("TAP TO START", 16, "#fff", 30);
+        drawText("NEON DASH", 42, COLORS.player, -20, 30);
+        drawText("TAP TO START", 15, "#fff", 30);
     } else if (gameState.showGameOverUI) {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
         const pop = Math.min(1, gameState.uiTimer);
         const scale = 1.0 + Math.sin(pop * Math.PI) * 0.1; 
 
-        drawText("CRASHED", 50, COLORS.obstacle, -60, 30, scale);
-        drawText(`SCORE: ${Math.floor(gameState.score)}`, 24, "#fff", 0, 0, scale);
-        drawText(`BEST: ${gameState.highScore}`, 20, COLORS.gold, 35, 15, scale);
-        drawText("TAP TO RESTART", 14, "#888", 85, 0, scale);
+        drawText("CRASHED", 48, COLORS.obstacle, -60, 35, scale);
+        drawText(`SCORE: ${Math.floor(gameState.score)}`, 22, "#fff", 0, 0, scale);
+        drawText(`BEST: ${gameState.highScore}`, 18, COLORS.gold, 35, 15, scale);
+        drawText("TAP TO RESTART", 13, "#666", 85, 0, scale);
     } else {
-        ctx.fillStyle = "#fff"; ctx.font = "bold 16px Orbitron"; ctx.textAlign = "left";
-        ctx.fillText(`SCORE: ${Math.floor(gameState.score)}`, 20, 40);
-        ctx.textAlign = "right"; ctx.fillText(`HI: ${gameState.highScore}`, canvas.width - 20, 40);
+        ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.font = "bold 16px Orbitron"; ctx.textAlign = "left";
+        ctx.fillText(`SCORE: ${Math.floor(gameState.score)}`, 25, 45);
+        ctx.textAlign = "right"; ctx.fillText(`BEST: ${gameState.highScore}`, canvas.width - 25, 45);
     }
 
     update();
