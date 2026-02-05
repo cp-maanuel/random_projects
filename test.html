@@ -6,7 +6,7 @@
 <title>NEON DASH 0.1 - OVERDRIVE BLOOM</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
-    body { margin: 0; overflow: hidden; background: #020202; font-family: 'Orbitron', sans-serif; user-select: none; touch-action: none; }
+    body { margin: 0; overflow: hidden; background: #010101; font-family: 'Orbitron', sans-serif; user-select: none; touch-action: none; }
     canvas { display: block; }
     
     .mobile-controls {
@@ -20,21 +20,21 @@
         pointer-events: none;
     }
     .btn {
-        width: 75px;
-        height: 75px;
-        border: 3px solid #00ffff;
+        width: 80px;
+        height: 80px;
+        border: 4px solid #00ffff;
         border-radius: 20px;
         display: flex;
         align-items: center;
         justify-content: center;
         color: #00ffff;
         font-size: 32px;
-        background: rgba(0, 255, 255, 0.1);
-        box-shadow: 0 0 15px #00ffff;
+        background: rgba(0, 255, 255, 0.15);
+        box-shadow: 0 0 20px #00ffff, inset 0 0 10px #00ffff;
         pointer-events: auto;
         transition: transform 0.05s;
     }
-    .btn:active { transform: scale(0.9); background: rgba(0, 255, 255, 0.3); }
+    .btn:active { transform: scale(0.9); background: rgba(0, 255, 255, 0.4); }
 </style>
 </head>
 <body>
@@ -48,15 +48,14 @@
 
 <script>
 const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d", { alpha: false }); // Optimization: Disable alpha for main canvas
+const ctx = canvas.getContext("2d");
 let lanePositions = [];
 
 const COLORS = {
     player: "#00ffff", 
     obstacle: "#ff0055", 
-    boost: "#ffcc00",
-    gold: "#FFD700",
-    track: "rgba(0, 255, 255, 0.08)",
+    track: "rgba(0, 255, 255, 0.1)",
+    dust: "rgba(0, 255, 255, 0.4)",
     overlay: "rgba(0, 0, 0, 0.85)"
 };
 
@@ -72,16 +71,26 @@ resize();
 
 /* ============ GAME STATE ============ */
 let gameState = {
-    started: false, paused: false, gameOver: false,
+    started: false,
+    gameOver: false,
     showGameOverUI: false,
-    uiTimer: 0, deathTimer: 0,
-    score: 0, highScore: parseInt(localStorage.getItem('neonDashHigh')) || 0,
-    speed: 7, baseSpeed: 7,
-    boostActive: false, boostTimer: 0, boostDuration: 400,
+    uiTimer: 0,
+    deathTimer: 0,
+    score: 0,
+    highScore: parseInt(localStorage.getItem('neonDashHigh')) || 0,
+    speed: 7,
+    baseSpeed: 7,
     timeSinceLastSpawn: 0
 };
 
-const player = { lane: 1, x: 0, targetX: 0, y: 0, w: 40, h: 40, vy: 0, groundY: 0, isJumping: false };
+const player = { 
+    lane: 1, x: 0, targetX: 0, y: 0, w: 40, h: 40, 
+    vy: 0, groundY: 0, isJumping: false 
+};
+
+let obstacles = [];
+let particles = []; 
+let dustTrail = [];
 
 function initPlayer() {
     player.groundY = canvas.height - 160;
@@ -93,28 +102,23 @@ function initPlayer() {
 }
 initPlayer();
 
-let obstacles = [];
-let boosts = [];
-let particles = []; 
-
 function createExplosion(x, y, color, count) {
-    const pCount = Math.min(count, 20); // Cap particles for performance
-    for (let i = 0; i < pCount; i++) {
+    for (let i = 0; i < count; i++) {
         particles.push({
             x: x, y: y,
-            vx: (Math.random() - 0.5) * 12,
-            vy: (Math.random() - 0.5) * 12,
-            life: 1.0, color: color
+            vx: (Math.random() - 0.5) * 15,
+            vy: (Math.random() - 0.5) * 15,
+            life: 1.0, color: color,
+            size: Math.random() * 5 + 2
         });
     }
 }
 
 function resetGame() {
-    gameState.started = true; gameState.paused = false; gameState.gameOver = false;
+    gameState.started = true; gameState.gameOver = false;
     gameState.showGameOverUI = false; gameState.deathTimer = 0; gameState.uiTimer = 0;
     gameState.score = 0; gameState.speed = 7; gameState.baseSpeed = 7;
-    gameState.boostActive = false; gameState.boostTimer = 0;
-    obstacles = []; boosts = []; particles = [];
+    obstacles = []; particles = []; dustTrail = [];
     initPlayer();
 }
 
@@ -128,37 +132,28 @@ document.getElementById("right-btn").addEventListener("touchstart", (e) => { e.p
 canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     if (!gameState.started || gameState.showGameOverUI) resetGame();
-    else if (gameState.paused) gameState.paused = false;
     else jump();
 });
 
 /* ============ RENDER HELPERS ============ */
-function drawNeonRect(x, y, w, h, color, glow) {
+function drawNeonRect(x, y, w, h, color, glow, isPlayer = false) {
     ctx.save();
-    ctx.shadowBlur = glow;
+    // Extra glow for players and obstacles
+    ctx.shadowBlur = glow + (isPlayer ? Math.sin(Date.now()/100)*5 : 0);
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     ctx.fillRect(x - w/2, y - h, w, h);
-    ctx.restore();
-}
-
-function drawUI() {
+    
+    // Core highlight
     ctx.fillStyle = "#fff";
-    ctx.font = "bold 16px Orbitron";
-    ctx.textAlign = "left";
-    ctx.fillText(`SCORE: ${Math.floor(gameState.score)}`, 20, 40);
-    ctx.textAlign = "right";
-    ctx.fillText(`HI: ${gameState.highScore}`, canvas.width - 20, 40);
-
-    if (gameState.boostActive) {
-        ctx.fillStyle = COLORS.boost;
-        ctx.fillRect(20, 55, (gameState.boostTimer/gameState.boostDuration) * 120, 6);
-    }
+    ctx.globalAlpha = 0.3;
+    ctx.fillRect(x - w/2 + 5, y - h + 5, w - 10, h - 10);
+    ctx.restore();
 }
 
 /* ============ CORE LOOP ============ */
 function update() {
-    if (!gameState.started || gameState.paused) return;
+    if (!gameState.started) return;
 
     if (gameState.gameOver) {
         gameState.deathTimer++;
@@ -169,112 +164,128 @@ function update() {
         return;
     }
 
-    // Logic updates
-    gameState.score += 0.2;
-    gameState.baseSpeed += 0.001;
-    gameState.speed = gameState.boostActive ? gameState.baseSpeed * 1.8 : gameState.baseSpeed;
-
-    if (gameState.boostActive) {
-        gameState.boostTimer--;
-        if (gameState.boostTimer <= 0) gameState.boostActive = false;
-    }
+    gameState.score += 0.25;
+    gameState.baseSpeed += 0.0012;
+    gameState.speed = gameState.baseSpeed;
 
     // Player Physics
     player.x += (player.targetX - player.x) * 0.25;
-    player.vy += 0.9;
+    player.vy += 0.95;
     player.y += player.vy;
     if (player.y > player.groundY) { player.y = player.groundY; player.vy = 0; player.isJumping = false; }
 
+    // Create Dust Trail when on ground
+    if (!player.isJumping) {
+        dustTrail.push({
+            x: player.x + (Math.random() - 0.5) * 20,
+            y: player.y,
+            size: Math.random() * 6 + 2,
+            life: 1.0
+        });
+    }
+
     // Spawning
     gameState.timeSinceLastSpawn++;
-    if (gameState.timeSinceLastSpawn > Math.max(12, 35 - gameState.baseSpeed)) {
-        if (Math.random() < 0.08 && !gameState.boostActive) {
-            boosts.push({ x: lanePositions[Math.floor(Math.random()*3)], y: -50 });
-        } else {
-            const safeLane = Math.floor(Math.random() * 3);
-            [0, 1, 2].forEach(l => { if (l !== safeLane) obstacles.push({ x: lanePositions[l], y: -50 }); });
-        }
+    if (gameState.timeSinceLastSpawn > Math.max(10, 32 - gameState.baseSpeed)) {
+        const safeLane = Math.floor(Math.random() * 3);
+        [0, 1, 2].forEach(l => { if (l !== safeLane) obstacles.push({ x: lanePositions[l], y: -50 }); });
         gameState.timeSinceLastSpawn = 0;
     }
 
-    // Collisions (Tightened for performance)
+    // Collisions
     for (let i = obstacles.length - 1; i >= 0; i--) {
         let o = obstacles[i];
         o.y += gameState.speed;
         if (Math.abs(player.x - o.x) < 35 && Math.abs(player.y - 20 - o.y) < 35) {
-            if (gameState.boostActive) {
-                createExplosion(o.x, o.y, COLORS.boost, 8);
-                obstacles.splice(i, 1);
-                gameState.score += 50;
-            } else {
-                gameState.gameOver = true;
-                createExplosion(player.x, player.y, COLORS.player, 25);
-                if (gameState.score > gameState.highScore) {
-                    gameState.highScore = Math.floor(gameState.score);
-                    localStorage.setItem('neonDashHigh', gameState.highScore);
-                }
+            gameState.gameOver = true;
+            createExplosion(player.x, player.y, COLORS.player, 30);
+            if (gameState.score > gameState.highScore) {
+                gameState.highScore = Math.floor(gameState.score);
+                localStorage.setItem('neonDashHigh', gameState.highScore);
             }
         } else if (o.y > canvas.height + 100) obstacles.splice(i, 1);
     }
 
-    for (let i = boosts.length - 1; i >= 0; i--) {
-        boosts[i].y += gameState.speed;
-        if (Math.abs(player.x - boosts[i].x) < 40 && Math.abs(player.y - boosts[i].y) < 40) {
-            gameState.boostActive = true;
-            gameState.boostTimer = gameState.boostDuration;
-            boosts.splice(i, 1);
-        } else if (boosts[i].y > canvas.height + 100) boosts.splice(i, 1);
+    // Update Dust
+    for (let i = dustTrail.length - 1; i >= 0; i--) {
+        dustTrail[i].y += gameState.speed * 0.5;
+        dustTrail[i].life -= 0.02;
+        if (dustTrail[i].life <= 0) dustTrail.splice(i, 1);
     }
 
+    // Update Particles
     for (let i = particles.length - 1; i >= 0; i--) {
         particles[i].x += particles[i].vx;
         particles[i].y += particles[i].vy;
-        particles[i].life -= 0.03;
+        particles[i].life -= 0.025;
         if (particles[i].life <= 0) particles.splice(i, 1);
     }
 }
 
 function loop() {
-    ctx.fillStyle = "#020202";
+    ctx.fillStyle = "#010101";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Track
+    // Track Lines
     ctx.strokeStyle = COLORS.track;
-    lanePositions.forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); });
+    ctx.lineWidth = 2;
+    lanePositions.forEach(x => { 
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); 
+    });
+
+    // Draw Dust Trail
+    dustTrail.forEach(d => {
+        ctx.globalAlpha = d.life * 0.5;
+        ctx.fillStyle = COLORS.player;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.globalAlpha = 1;
 
     // Entities
     if (!gameState.gameOver) {
-        const pCol = (gameState.boostActive && Math.floor(Date.now()/100)%2) ? COLORS.boost : COLORS.player;
-        drawNeonRect(player.x, player.y, 40, 40, pCol, 15);
+        drawNeonRect(player.x, player.y, 40, 40, COLORS.player, 30, true);
     }
     
-    obstacles.forEach(o => drawNeonRect(o.x, o.y, 45, 45, COLORS.obstacle, 10));
-    boosts.forEach(b => drawNeonRect(b.x, b.y, 20, 20, COLORS.boost, 20));
+    obstacles.forEach(o => drawNeonRect(o.x, o.y, 45, 45, COLORS.obstacle, 20));
     
     particles.forEach(p => {
         ctx.globalAlpha = p.life;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = p.color;
         ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, 4, 4);
+        ctx.fillRect(p.x, p.y, p.size, p.size);
     });
     ctx.globalAlpha = 1;
 
     // UI Overlays
     if (!gameState.started) {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.textAlign = "center"; ctx.fillStyle = COLORS.player; ctx.font = "40px Orbitron";
+        ctx.textAlign = "center"; 
+        ctx.shadowBlur = 20; ctx.shadowColor = COLORS.player;
+        ctx.fillStyle = COLORS.player; ctx.font = "40px Orbitron";
         ctx.fillText("NEON DASH", canvas.width/2, canvas.height/2 - 20);
+        ctx.shadowBlur = 0;
         ctx.fillStyle = "#fff"; ctx.font = "16px Orbitron";
         ctx.fillText("TAP TO START", canvas.width/2, canvas.height/2 + 30);
     } else if (gameState.showGameOverUI) {
-        ctx.fillStyle = `rgba(0,0,0,${gameState.uiTimer * 0.8})`; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = `rgba(0,0,0,${gameState.uiTimer * 0.85})`; ctx.fillRect(0,0,canvas.width,canvas.height);
         ctx.textAlign = "center"; ctx.fillStyle = COLORS.obstacle; ctx.font = "50px Orbitron";
+        ctx.shadowBlur = 25; ctx.shadowColor = COLORS.obstacle;
         ctx.fillText("CRASHED", canvas.width/2, canvas.height/2 - 40);
+        ctx.shadowBlur = 0;
         ctx.fillStyle = "#fff"; ctx.font = "20px Orbitron";
         ctx.fillText(`SCORE: ${Math.floor(gameState.score)}`, canvas.width/2, canvas.height/2 + 10);
-        ctx.font = "14px Orbitron"; ctx.fillStyle = "#888";
+        ctx.font = "14px Orbitron"; ctx.fillStyle = "#aaa";
         ctx.fillText("TAP TO RESTART", canvas.width/2, canvas.height/2 + 60);
     } else {
-        drawUI();
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px Orbitron";
+        ctx.textAlign = "left";
+        ctx.fillText(`SCORE: ${Math.floor(gameState.score)}`, 20, 40);
+        ctx.textAlign = "right";
+        ctx.fillText(`HI: ${gameState.highScore}`, canvas.width - 20, 40);
     }
 
     update();
