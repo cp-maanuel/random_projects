@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NEON DASH 0.1 - OVERDRIVE BLOOM</title>
+<title>NEON DASH 0.1 - TRIANGLE EDITION</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
     body { margin: 0; overflow: hidden; background: #010101; font-family: 'Orbitron', sans-serif; user-select: none; touch-action: none; }
@@ -38,11 +38,10 @@
         transition: transform 0.1s;
     }
 
-    /* Pause Button - No Circle, Smaller Size */
     .btn-pause {
         width: 40px;
         height: 40px;
-        border: none; /* Removed the circle border */
+        border: none;
         background: transparent;
         box-shadow: none;
         position: relative;
@@ -51,7 +50,7 @@
         content: '';
         position: absolute;
         width: 4px;
-        height: 16px; /* Slightly shorter lines */
+        height: 16px;
         background: white;
         border-radius: 2px;
         box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
@@ -197,12 +196,24 @@ canvas.addEventListener("touchstart", (e) => {
 });
 
 /* ============ RENDER ============ */
-function drawNeonRect(x, y, w, h, color, glow, isPlayer = false) {
+function drawNeonShape(x, y, w, h, color, glow, isPlayer = false) {
     ctx.save();
     ctx.shadowBlur = glow + (isPlayer ? Math.sin(Date.now()/120)*10 : 0);
     ctx.shadowColor = color;
     ctx.fillStyle = color;
-    ctx.fillRect(x - w/2, y - h, w, h);
+    
+    if (isPlayer) {
+        // Draw Triangle for Player
+        ctx.beginPath();
+        ctx.moveTo(x, y - h);          // Top point
+        ctx.lineTo(x - w/2, y);      // Bottom left
+        ctx.lineTo(x + w/2, y);      // Bottom right
+        ctx.closePath();
+        ctx.fill();
+    } else {
+        // Draw Rectangle for Obstacles
+        ctx.fillRect(x - w/2, y - h, w, h);
+    }
     ctx.restore();
 }
 
@@ -298,8 +309,8 @@ function loop() {
     });
     ctx.globalAlpha = 1;
 
-    if (!gameState.gameOver) drawNeonRect(player.x, player.y, 40, 40, COLORS.player, 40, true);
-    obstacles.forEach(o => drawNeonRect(o.x, o.y, 45, 45, COLORS.obstacle, 25));
+    if (!gameState.gameOver) drawNeonShape(player.x, player.y, 40, 40, COLORS.player, 40, true);
+    obstacles.forEach(o => drawNeonShape(o.x, o.y, 45, 45, COLORS.obstacle, 25));
     particles.forEach(p => {
         ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size);
     });
