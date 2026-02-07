@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NEON DASH 0.1 - TRIANGLE EDITION</title>
+<title>NEON DASH 0.2 - TACTICAL PAUSE</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
     body { margin: 0; overflow: hidden; background: #010101; font-family: 'Orbitron', sans-serif; user-select: none; touch-action: none; }
@@ -38,6 +38,7 @@
         transition: transform 0.1s;
     }
 
+    /* === PAUSE / RESUME BUTTON STYLING === */
     .btn-pause {
         width: 40px;
         height: 40px;
@@ -46,6 +47,8 @@
         box-shadow: none;
         position: relative;
     }
+    
+    /* The two vertical lines for PAUSE symbol */
     .btn-pause::before, .btn-pause::after {
         content: '';
         position: absolute;
@@ -54,10 +57,28 @@
         background: white;
         border-radius: 2px;
         box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+        transition: all 0.2s ease;
     }
     .btn-pause::before { left: 14px; }
     .btn-pause::after { right: 14px; }
     
+    /* Transformation to RESUME symbol (Triangle) when class 'is-paused' is added */
+    .btn-pause.is-paused::before {
+        height: 0;
+        width: 0;
+        border-top: 10px solid transparent;
+        border-bottom: 10px solid transparent;
+        border-left: 18px solid white;
+        background: transparent;
+        box-shadow: none;
+        border-radius: 0;
+        left: 14px; /* Center the triangle visually */
+    }
+    .btn-pause.is-paused::after {
+        opacity: 0; /* Hide the second line */
+        transform: scale(0);
+    }
+
     .btn:active { transform: scale(0.85); background: rgba(255, 255, 255, 0.3); }
     .ui-hidden { opacity: 0; pointer-events: none; }
 </style>
@@ -76,6 +97,7 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const uiLayer = document.getElementById("ui-controls");
+const pauseBtn = document.getElementById("pause-btn"); // Reference to button
 let lanePositions = [];
 
 const COLORS = {
@@ -132,6 +154,7 @@ function resetToHome() {
     gameState.gameOver = false;
     gameState.showGameOverUI = false;
     uiLayer.classList.add('ui-hidden');
+    pauseBtn.classList.remove('is-paused'); // Reset button visual
     obstacles = [];
     particles = [];
     dustTrail = [];
@@ -156,6 +179,9 @@ function resetGame() {
     gameState.score = 0; 
     gameState.speed = 6.5; 
     gameState.baseSpeed = 6.5;
+    
+    pauseBtn.classList.remove('is-paused'); // Ensure button is in 'Pause' state
+    
     obstacles = []; 
     particles = []; 
     dustTrail = [];
@@ -166,13 +192,25 @@ function resetGame() {
 function togglePause() {
     if (gameState.started && !gameState.gameOver) {
         gameState.paused = !gameState.paused;
+        
+        // Toggle the visual state of the button
+        if (gameState.paused) {
+            pauseBtn.classList.add('is-paused');
+        } else {
+            pauseBtn.classList.remove('is-paused');
+        }
     }
 }
 
 /* ============ INPUT ============ */
 document.getElementById("left-btn").addEventListener("touchstart", (e) => { e.preventDefault(); if(!gameState.paused) moveLeft(); });
 document.getElementById("right-btn").addEventListener("touchstart", (e) => { e.preventDefault(); if(!gameState.paused) moveRight(); });
-document.getElementById("pause-btn").addEventListener("touchstart", (e) => { e.preventDefault(); togglePause(); });
+
+// Updated Pause Button Listener
+document.getElementById("pause-btn").addEventListener("touchstart", (e) => { 
+    e.preventDefault(); 
+    togglePause(); 
+});
 
 function moveLeft() { if (player.lane > 0 && !gameState.gameOver) { player.lane--; player.targetX = lanePositions[player.lane]; } }
 function moveRight() { if (player.lane < 2 && !gameState.gameOver) { player.lane++; player.targetX = lanePositions[player.lane]; } }
@@ -185,8 +223,9 @@ canvas.addEventListener("touchstart", (e) => {
     if (!gameState.started) {
         resetGame();
     } else if (gameState.paused) {
+        // Only allow HOME button on pause screen
+        // REMOVED: "else gameState.paused = false" (Tap to resume)
         if (touchY > canvas.height / 2 + 50 && touchY < canvas.height / 2 + 120) resetToHome();
-        else gameState.paused = false;
     } else if (gameState.showGameOverUI) {
         if (touchY > canvas.height / 2 + 80 && touchY < canvas.height / 2 + 140) resetToHome();
         else resetGame();
@@ -203,15 +242,13 @@ function drawNeonShape(x, y, w, h, color, glow, isPlayer = false) {
     ctx.fillStyle = color;
     
     if (isPlayer) {
-        // Draw Triangle for Player
         ctx.beginPath();
-        ctx.moveTo(x, y - h);          // Top point
-        ctx.lineTo(x - w/2, y);      // Bottom left
-        ctx.lineTo(x + w/2, y);      // Bottom right
+        ctx.moveTo(x, y - h);          
+        ctx.lineTo(x - w/2, y);      
+        ctx.lineTo(x + w/2, y);      
         ctx.closePath();
         ctx.fill();
     } else {
-        // Draw Rectangle for Obstacles
         ctx.fillRect(x - w/2, y - h, w, h);
     }
     ctx.restore();
@@ -324,7 +361,7 @@ function loop() {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
         drawText("PAUSED", 48, "#fff", -60, 20);
         drawText(`SCORE: ${Math.floor(gameState.score)}`, 22, COLORS.player, 0);
-        drawText("TAP TO RESUME", 14, "#fff", 50);
+        // REMOVED: "TAP TO RESUME" text
         drawText("HOME", 18, COLORS.obstacle, 100, 10);
     } else if (gameState.showGameOverUI) {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
