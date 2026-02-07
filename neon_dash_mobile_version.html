@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NEON DASH 1.6 - HUD STACKED</title>
+<title>NEON DASH 1.7 - COLOR REFINED</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
     body { margin: 0; overflow: hidden; background: #000000; font-family: 'Orbitron', sans-serif; user-select: none; touch-action: none; }
@@ -312,7 +312,7 @@ function update() {
         return;
     }
 
-    gameState.score += 0.2; // Classic original scoring
+    gameState.score += 0.2; 
     gameState.baseSpeed += 0.0007; 
     gameState.speed = gameState.baseSpeed;
 
@@ -404,7 +404,7 @@ function loop() {
     } else if (gameState.paused) {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
         drawText("PAUSED", 48, "#fff", 0, -60, 20); 
-        drawText(`SCORE : ${Math.floor(gameState.score)}`, 22, COLORS.obstacle, 0, 0, 15); 
+        drawText(`SCORE : ${Math.floor(gameState.score)}`, 22, "#ffffff", 0, 0, 15); 
         drawText(`ZEN : ${gameState.zenRunCount}`, 18, COLORS.zen, 0, 40, 10);
 
     } else if (gameState.showGameOverUI) {
@@ -412,11 +412,11 @@ function loop() {
         const pop = Math.min(1, gameState.uiTimer);
         const scale = 1.0 + Math.sin(pop * Math.PI) * 0.1; 
         drawText("CRASHED", 48, COLORS.obstacle, 0, -100, 35, scale);
-        drawText(`SCORE : ${Math.floor(gameState.score)}`, 22, COLORS.obstacle, 0, -50, 15, scale);
+        // Crashed Screen Score changed to White
+        drawText(`SCORE : ${Math.floor(gameState.score)}`, 22, "#ffffff", 0, -50, 0, scale);
         drawText(`BEST : ${gameState.highScore}`, 18, COLORS.gold, 0, 0, 15, scale); 
 
     } else if (gameState.started) {
-        // PLAYER SCREEN HUD - SCORE BELOW ZEN
         ctx.font = "bold 16px Orbitron"; 
         ctx.shadowBlur = 15;
         ctx.textAlign = "left";
@@ -426,12 +426,12 @@ function loop() {
         ctx.fillStyle = COLORS.zen; 
         ctx.fillText(`ZEN : ${gameState.zenRunCount}`, 25, 45);
         
-        // SCORE (Positioned below Zen)
-        ctx.shadowColor = COLORS.obstacle;
-        ctx.fillStyle = COLORS.obstacle;
+        // SCORE (Now Cyan like the title)
+        ctx.shadowColor = COLORS.player;
+        ctx.fillStyle = COLORS.player;
         ctx.fillText(`SCORE : ${Math.floor(gameState.score)}`, 25, 75);
 
-        // BEST (Kept on the right)
+        // BEST
         ctx.textAlign = "right"; 
         ctx.shadowColor = COLORS.gold;
         ctx.fillStyle = COLORS.gold; 
