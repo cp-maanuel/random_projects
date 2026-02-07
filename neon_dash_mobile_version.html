@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NEON DASH 1.9 - ANIMATED</title>
+<title>NEON DASH 1.8 - CORNER UI</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
     body { margin: 0; overflow: hidden; background: #000000; font-family: 'Orbitron', sans-serif; user-select: none; touch-action: none; }
@@ -89,6 +89,13 @@
         z-index: 100;
         transition: opacity 0.3s;
     }
+    #home-btn:active {
+        background: rgba(0, 255, 255, 0.3);
+        transform: translate(-50%, -50%) scale(0.95);
+    }
+
+    .btn:active { transform: scale(0.85); background: rgba(255, 255, 255, 0.3); }
+    .ui-hidden { opacity: 0 !important; pointer-events: none !important; }
 </style>
 </head>
 <body>
@@ -148,22 +155,12 @@ let gameState = {
     fadeLevel: 0
 };
 
-const player = { 
-    lane: 1, 
-    x: 0, 
-    targetX: 0, 
-    y: 0, 
-    w: 40, 
-    h: 40, 
-    groundY: 0,
-    tilt: 0,
-    lastX: 0,
-    trail: []
-};
+const player = { lane: 1, x: 0, targetX: 0, y: 0, w: 40, h: 40, vy: 0, groundY: 0 };
 
 let obstacles = [];
 let zens = []; 
 let particles = []; 
+let dustTrail = [];
 
 function initPlayer() {
     player.groundY = canvas.height - 160;
@@ -171,9 +168,6 @@ function initPlayer() {
     player.lane = 1;
     player.targetX = lanePositions[1];
     player.x = lanePositions[1];
-    player.lastX = player.x;
-    player.tilt = 0;
-    player.trail = [];
 }
 initPlayer();
 
@@ -182,12 +176,14 @@ function resetToHome() {
     gameState.paused = false;
     gameState.gameOver = false;
     gameState.showGameOverUI = false;
+    gameState.fadeLevel = 0;
     uiLayer.classList.add('ui-hidden');
     homeBtn.classList.add('ui-hidden');
     pauseBtn.classList.remove('is-paused');
     obstacles = [];
     zens = [];
     particles = [];
+    dustTrail = [];
 }
 
 function createExplosion(x, y, color, count, speed = 20) {
@@ -202,6 +198,7 @@ function createExplosion(x, y, color, count, speed = 20) {
 }
 
 function resetGame() {
+    if (!gameState.started) gameState.fadeLevel = 1.0;
     gameState.started = true; 
     gameState.paused = false;
     gameState.gameOver = false;
@@ -212,11 +209,14 @@ function resetGame() {
     gameState.zenRunCount = 0;
     gameState.speed = 6.5; 
     gameState.baseSpeed = 6.5;
+    
     pauseBtn.classList.remove('is-paused');
     homeBtn.classList.add('ui-hidden');
+    
     obstacles = []; 
     zens = [];
     particles = []; 
+    dustTrail = [];
     initPlayer();
     uiLayer.classList.remove('ui-hidden');
 }
@@ -235,6 +235,7 @@ function togglePause() {
     }
 }
 
+/* ============ INPUT ============ */
 document.getElementById("left-btn").addEventListener("touchstart", (e) => { e.preventDefault(); if(!gameState.paused) moveLeft(); });
 document.getElementById("right-btn").addEventListener("touchstart", (e) => { e.preventDefault(); if(!gameState.paused) moveRight(); });
 document.getElementById("pause-btn").addEventListener("touchstart", (e) => { e.preventDefault(); togglePause(); });
@@ -248,47 +249,20 @@ canvas.addEventListener("touchstart", (e) => {
     if (!gameState.started) resetGame();
 });
 
-function drawPlayer(x, y, w, h, tilt, isTrail = false, alpha = 1) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(tilt);
-    
-    // Motion Stretch
-    const stretchY = 1 + Math.abs(tilt) * 0.5;
-    const squeezeX = 1 - Math.abs(tilt) * 0.2;
-    ctx.scale(squeezeX, stretchY);
-
-    ctx.globalAlpha = alpha;
-    ctx.shadowBlur = isTrail ? 5 : 25; 
-    ctx.shadowColor = COLORS.player;
-    ctx.fillStyle = COLORS.player;
-    
-    // Main Triangle Body
-    ctx.beginPath();
-    ctx.moveTo(0, -h);          
-    ctx.lineTo(-w/2, 0);      
-    ctx.lineTo(w/2, 0);      
-    ctx.closePath(); 
-    ctx.fill();
-
-    if (!isTrail) {
-        // Engine Core
-        ctx.fillStyle = "#ffffff";
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.arc(0, -h/2, w/6 + Math.sin(Date.now()*0.02)*2, 0, Math.PI*2);
-        ctx.fill();
-    }
-    
-    ctx.restore();
-}
-
+/* ============ RENDER ============ */
 function drawNeonShape(x, y, w, h, color, glow, type = 'rect') {
     ctx.save();
     ctx.shadowBlur = glow; 
     ctx.shadowColor = color;
     ctx.fillStyle = color;
-    if (type === 'zen') {
+    
+    if (type === 'player') {
+        ctx.beginPath();
+        ctx.moveTo(x, y - h);          
+        ctx.lineTo(x - w/2, y);      
+        ctx.lineTo(x + w/2, y);      
+        ctx.closePath(); ctx.fill();
+    } else if (type === 'zen') {
         ctx.beginPath();
         ctx.moveTo(x, y - h/2);
         ctx.lineTo(x + w/2, y);
@@ -316,8 +290,11 @@ function drawText(text, size, color, xOffset, yOffset, glow = 0, scale = 1, alig
 
 function update() {
     if (!gameState.started || gameState.paused) return;
+    if (gameState.fadeLevel > 0) {
+        gameState.fadeLevel -= 0.02;
+        if (gameState.fadeLevel < 0) gameState.fadeLevel = 0;
+    }
 
-    // Particle logic
     for (let i = particles.length - 1; i >= 0; i--) {
         particles[i].x += particles[i].vx; particles[i].y += particles[i].vy;
         particles[i].life -= 0.025; if (particles[i].life <= 0) particles.splice(i, 1);
@@ -339,43 +316,26 @@ function update() {
     gameState.baseSpeed += 0.0007; 
     gameState.speed = gameState.baseSpeed;
 
-    // Movement & Animation Physics
-    player.lastX = player.x;
-    player.x += (player.targetX - player.x) * 0.18;
-    
-    // Velocity-based tilt (capped at 0.4 radians)
-    const velocity = player.x - player.lastX;
-    player.tilt = Math.max(-0.4, Math.min(0.4, velocity * 0.08));
+    player.x += (player.targetX - player.x) * 0.18; 
+    player.y = player.groundY; 
 
-    // Trail logic
-    if (Math.abs(velocity) > 0.5) {
-        player.trail.push({ x: player.x, y: player.y, tilt: player.tilt, life: 1.0 });
-    }
-    for (let i = player.trail.length - 1; i >= 0; i--) {
-        player.trail[i].life -= 0.1;
-        if (player.trail[i].life <= 0) player.trail.splice(i, 1);
-    }
+    dustTrail.push({ x: player.x + (Math.random() - 0.5) * 15, y: player.y, size: Math.random() * 5 + 1, life: 0.8 });
 
-    // Engine exhaust particles
-    if (Math.random() > 0.5) {
-        particles.push({
-            x: player.x + (Math.random()-0.5)*20,
-            y: player.y,
-            vx: (Math.random()-0.5)*2,
-            vy: 2 + Math.random()*3,
-            life: 0.5,
-            color: COLORS.player,
-            size: Math.random()*3
-        });
-    }
-
-    // Spawning & Collision (Same as 1.8)
     gameState.timeSinceLastSpawn++;
     if (gameState.timeSinceLastSpawn > Math.max(18, 45 - gameState.baseSpeed)) {
         const obstacleLane = Math.floor(Math.random() * 3);
+        let blockedLanes = [obstacleLane];
         obstacles.push({ x: lanePositions[obstacleLane], y: -100 });
-        if (Math.random() > 0.4) {
-            const zenLane = Math.floor(Math.random() * 3);
+        
+        if (Math.random() > 0.75) {
+            let lane2; do { lane2 = Math.floor(Math.random()*3); } while(lane2 === obstacleLane);
+            obstacles.push({ x: lanePositions[lane2], y: -100 });
+            blockedLanes.push(lane2);
+        }
+
+        let safeLanes = [0, 1, 2].filter(l => !blockedLanes.includes(l));
+        if (safeLanes.length > 0 && Math.random() > 0.4) {
+            const zenLane = safeLanes[Math.floor(Math.random() * safeLanes.length)];
             zens.push({ x: lanePositions[zenLane], y: -100, collected: false });
         }
         gameState.timeSinceLastSpawn = 0;
@@ -399,12 +359,17 @@ function update() {
         z.y += gameState.speed;
         if (!z.collected && Math.abs(player.x - z.x) < 35 && Math.abs((player.y - 20) - z.y) < 35) {
             z.collected = true;
-            gameState.zenRunCount++;
-            gameState.totalZen++;
+            gameState.zenRunCount += 1;
+            gameState.totalZen += 1; 
             localStorage.setItem('neonDashTotalZen', gameState.totalZen); 
             createExplosion(z.x, z.y, COLORS.zen, 15, 12);
             zens.splice(i, 1);
         } else if (z.y > canvas.height + 100) zens.splice(i, 1);
+    }
+
+    for (let i = dustTrail.length - 1; i >= 0; i--) {
+        dustTrail[i].y += gameState.speed * 0.4;
+        dustTrail[i].life -= 0.03; if (dustTrail[i].life <= 0) dustTrail.splice(i, 1);
     }
 }
 
@@ -415,55 +380,71 @@ function loop() {
         ctx.strokeStyle = COLORS.track; ctx.lineWidth = 3;
         lanePositions.forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); });
         
-        // Draw Trail After-images
-        player.trail.forEach(t => drawPlayer(t.x, t.y, 40, 40, t.tilt, true, t.life * 0.4));
+        dustTrail.forEach(d => {
+            ctx.globalAlpha = d.life * 0.3; ctx.fillStyle = COLORS.player;
+            ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
 
         zens.forEach(z => drawNeonShape(z.x, z.y, 22, 22, COLORS.zen, 20, 'zen'));
-        if (!gameState.gameOver) drawPlayer(player.x, player.y, 40, 40, player.tilt);
+        if (!gameState.gameOver) drawNeonShape(player.x, player.y, 40, 40, COLORS.player, 40, 'player');
         obstacles.forEach(o => drawNeonShape(o.x, o.y, 45, 45, COLORS.obstacle, 25, 'rect'));
-        
-        particles.forEach(p => {
-            ctx.globalAlpha = p.life;
-            ctx.fillStyle = p.color;
-            ctx.fillRect(p.x, p.y, p.size, p.size);
-        });
+        particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); });
         ctx.globalAlpha = 1;
     }
 
-    // UI Rendering
     if (!gameState.started) {
         drawText("NEON DASH", 42, COLORS.player, 0, -40, 30);
         drawText("TAP TO START", 15, "#fff", 0, 10);
+        
+        // HOME SCREEN: ZEN MOVED TO TOP RIGHT
         const zenX = canvas.width - 65;
         const zenY = 45;
         drawNeonShape(zenX, zenY, 22, 22, COLORS.zen, 20, 'zen');
+        
+        // Text positioning relative to center offset system
+        ctx.save();
         ctx.font = "bold 20px Orbitron";
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = COLORS.zen;
         ctx.fillStyle = COLORS.zen;
         ctx.textAlign = "left";
         ctx.fillText(`${gameState.totalZen}`, zenX + 17, zenY + 8);
+        ctx.restore();
 
     } else if (gameState.paused) {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
         drawText("PAUSED", 48, "#fff", 0, -60, 20); 
-        drawText(`SCORE : ${Math.floor(gameState.score)}`, 22, "#ffffff", 0, 0, 15); 
-        drawText(`ZEN : ${gameState.zenRunCount}`, 18, COLORS.zen, 0, 40, 10);
+        drawText(`SCORE: ${Math.floor(gameState.score)}`, 22, "#ffffff", 0, 0, 15); 
+        drawText(`ZEN: ${gameState.zenRunCount}`, 18, COLORS.zen, 0, 40, 10);
 
     } else if (gameState.showGameOverUI) {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
-        drawText("CRASHED", 48, COLORS.obstacle, 0, -100, 35);
-        drawText(`SCORE : ${Math.floor(gameState.score)}`, 22, "#ffffff", 0, -50);
-        drawText(`BEST : ${gameState.highScore}`, 18, COLORS.gold, 0, 0, 15); 
+        const pop = Math.min(1, gameState.uiTimer);
+        const scale = 1.0 + Math.sin(pop * Math.PI) * 0.1; 
+        drawText("CRASHED", 48, COLORS.obstacle, 0, -100, 35, scale);
+        drawText(`SCORE: ${Math.floor(gameState.score)}`, 22, "#ffffff", 0, -50, 0, scale);
+        drawText(`BEST: ${gameState.highScore}`, 18, COLORS.gold, 0, 0, 15, scale); 
 
     } else if (gameState.started) {
         ctx.font = "bold 16px Orbitron"; 
+        ctx.shadowBlur = 15;
         ctx.textAlign = "left";
+
+        ctx.shadowColor = COLORS.zen;
         ctx.fillStyle = COLORS.zen; 
-        ctx.fillText(`ZEN : ${gameState.zenRunCount}`, 25, 45);
+        ctx.fillText(`ZEN: ${gameState.zenRunCount}`, 25, 45);
+        
+        ctx.shadowColor = COLORS.player;
         ctx.fillStyle = COLORS.player;
-        ctx.fillText(`SCORE : ${Math.floor(gameState.score)}`, 25, 75);
+        ctx.fillText(`SCORE: ${Math.floor(gameState.score)}`, 25, 75);
+
         ctx.textAlign = "right"; 
+        ctx.shadowColor = COLORS.gold;
         ctx.fillStyle = COLORS.gold; 
-        ctx.fillText(`BEST : ${gameState.highScore}`, canvas.width - 25, 45);
+        ctx.fillText(`BEST: ${gameState.highScore}`, canvas.width - 25, 45);
+        
+        ctx.shadowBlur = 0;
     }
     
     update();
