@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NEON DASH 1.1 - ZEN ICON UI</title>
+<title>NEON DASH 1.4 - UI REFINED</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
     body { margin: 0; overflow: hidden; background: #000000; font-family: 'Orbitron', sans-serif; user-select: none; touch-action: none; }
@@ -146,8 +146,9 @@ let gameState = {
     uiTimer: 0, 
     deathTimer: 0,
     score: 0, 
+    zenRunCount: 0, 
     totalZen: parseInt(localStorage.getItem('neonDashTotalZen')) || 0,
-    highScore: parseInt(localStorage.getItem('neonDashZenHigh')) || 0,
+    highScore: parseInt(localStorage.getItem('neonDashHighScore')) || 0, 
     speed: 6.5,
     baseSpeed: 6.5,
     timeSinceLastSpawn: 0,
@@ -167,7 +168,6 @@ function initPlayer() {
     player.lane = 1;
     player.targetX = lanePositions[1];
     player.x = lanePositions[1];
-    player.vy = 0;
 }
 initPlayer();
 
@@ -206,6 +206,7 @@ function resetGame() {
     gameState.deathTimer = 0; 
     gameState.uiTimer = 0;
     gameState.score = 0; 
+    gameState.zenRunCount = 0;
     gameState.speed = 6.5; 
     gameState.baseSpeed = 6.5;
     
@@ -226,7 +227,7 @@ function togglePause() {
         if (gameState.paused) {
             pauseBtn.classList.add('is-paused');
             homeBtn.classList.remove('ui-hidden');
-            homeBtn.style.top = (canvas.height / 2 + 60) + "px"; 
+            homeBtn.style.top = (canvas.height / 2 + 100) + "px"; 
         } else {
             pauseBtn.classList.remove('is-paused');
             homeBtn.classList.add('ui-hidden');
@@ -270,9 +271,7 @@ function drawNeonShape(x, y, w, h, color, glow, type = 'rect') {
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(x, y, w/4, 0, Math.PI*2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, w/4, 0, Math.PI*2); ctx.fill();
     } else {
         ctx.fillRect(x - w/2, y - h, w, h);
     }
@@ -315,6 +314,7 @@ function update() {
 
     gameState.baseSpeed += 0.0007; 
     gameState.speed = gameState.baseSpeed;
+    gameState.score += gameState.speed / 10; 
 
     player.x += (player.targetX - player.x) * 0.18; 
     player.y = player.groundY; 
@@ -334,12 +334,10 @@ function update() {
         }
 
         let safeLanes = [0, 1, 2].filter(l => !blockedLanes.includes(l));
-        
         if (safeLanes.length > 0 && Math.random() > 0.4) {
             const zenLane = safeLanes[Math.floor(Math.random() * safeLanes.length)];
             zens.push({ x: lanePositions[zenLane], y: -100, collected: false });
         }
-
         gameState.timeSinceLastSpawn = 0;
     }
 
@@ -349,9 +347,9 @@ function update() {
         if (Math.abs(player.x - o.x) < 30 && Math.abs((player.y - 20) - o.y) < 30) {
             gameState.gameOver = true;
             createExplosion(player.x, player.y - 20, COLORS.player, 35);
-            if (gameState.score > gameState.highScore) {
-                gameState.highScore = gameState.score;
-                localStorage.setItem('neonDashZenHigh', gameState.highScore);
+            if (Math.floor(gameState.score) > gameState.highScore) {
+                gameState.highScore = Math.floor(gameState.score);
+                localStorage.setItem('neonDashHighScore', gameState.highScore);
             }
         } else if (o.y > canvas.height + 100) obstacles.splice(i, 1);
     }
@@ -359,17 +357,14 @@ function update() {
     for (let i = zens.length - 1; i >= 0; i--) {
         let z = zens[i];
         z.y += gameState.speed;
-
         if (!z.collected && Math.abs(player.x - z.x) < 35 && Math.abs((player.y - 20) - z.y) < 35) {
             z.collected = true;
-            gameState.score += 1; 
+            gameState.zenRunCount += 1;
             gameState.totalZen += 1; 
             localStorage.setItem('neonDashTotalZen', gameState.totalZen); 
             createExplosion(z.x, z.y, COLORS.zen, 15, 12);
             zens.splice(i, 1);
-        } else if (z.y > canvas.height + 100) {
-            zens.splice(i, 1);
-        }
+        } else if (z.y > canvas.height + 100) zens.splice(i, 1);
     }
 
     for (let i = dustTrail.length - 1; i >= 0; i--) {
@@ -392,48 +387,60 @@ function loop() {
         ctx.globalAlpha = 1;
 
         zens.forEach(z => drawNeonShape(z.x, z.y, 22, 22, COLORS.zen, 20, 'zen'));
-
         if (!gameState.gameOver) drawNeonShape(player.x, player.y, 40, 40, COLORS.player, 40, 'player');
         obstacles.forEach(o => drawNeonShape(o.x, o.y, 45, 45, COLORS.obstacle, 25, 'rect'));
-        
         particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size); });
         ctx.globalAlpha = 1;
-
-        if (gameState.fadeLevel > 0) {
-            ctx.fillStyle = `rgba(0, 0, 0, ${gameState.fadeLevel})`;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
     }
 
     if (!gameState.started) {
         drawText("NEON DASH", 42, COLORS.player, 0, -40, 30);
         drawText("TAP TO START", 15, "#fff", 0, 10);
         
-        // DRAW ZEN SHAPE + COUNT ON HOME SCREEN
-        const iconX = canvas.width / 2 - 40;
+        // HOME SCREEN: No colon as requested
+        const iconX = canvas.width / 2 - 25; 
         const iconY = canvas.height / 2 + 60;
         drawNeonShape(iconX, iconY, 22, 22, COLORS.zen, 20, 'zen');
-        drawText(`${gameState.totalZen}`, 20, COLORS.zen, 25, 68, 15, 1, "left");
+        drawText(`${gameState.totalZen}`, 20, COLORS.zen, 12, 68, 15, 1, "left");
 
     } else if (gameState.paused) {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
         drawText("PAUSED", 48, "#fff", 0, -60, 20); 
-        drawText(`ZEN ${gameState.score}`, 22, COLORS.zen, 0, 0, 10); 
+        // Pause Screen: Colon restored
+        drawText(`SCORE: ${Math.floor(gameState.score)}`, 22, COLORS.obstacle, 0, 0, 15); 
+        drawText(`ZEN: ${gameState.zenRunCount}`, 18, COLORS.zen, 0, 40, 10);
+
     } else if (gameState.showGameOverUI) {
         ctx.fillStyle = COLORS.overlay; ctx.fillRect(0,0,canvas.width,canvas.height);
         const pop = Math.min(1, gameState.uiTimer);
         const scale = 1.0 + Math.sin(pop * Math.PI) * 0.1; 
         drawText("CRASHED", 48, COLORS.obstacle, 0, -100, 35, scale);
-        drawText(`ZEN ${gameState.score}`, 22, COLORS.zen, 0, -50, 15, scale);
-        drawText(`BEST ${gameState.highScore}`, 18, COLORS.gold, 0, 0, 15, scale); 
+        // Crash Screen: Colon restored
+        drawText(`SCORE: ${Math.floor(gameState.score)}`, 22, COLORS.obstacle, 0, -50, 15, scale);
+        drawText(`BEST: ${gameState.highScore}`, 18, COLORS.gold, 0, 0, 15, scale); 
+        drawText(`ZEN COLLECTED: ${gameState.zenRunCount}`, 14, COLORS.zen, 0, 35, 10, scale);
+
     } else if (gameState.started) {
+        // Gameplay HUD: Colon restored
         ctx.font = "bold 16px Orbitron"; 
+        ctx.shadowBlur = 15;
+        
         ctx.textAlign = "left";
+        ctx.shadowColor = COLORS.zen;
         ctx.fillStyle = COLORS.zen; 
-        ctx.fillText(`ZEN ${gameState.score}`, 25, 45);
+        ctx.fillText(`ZEN: ${gameState.zenRunCount}`, 25, 45);
+        
+        ctx.textAlign = "center";
+        ctx.shadowColor = COLORS.obstacle;
+        ctx.fillStyle = COLORS.obstacle;
+        ctx.fillText(`SCORE: ${Math.floor(gameState.score)}`, canvas.width/2, 45);
+
         ctx.textAlign = "right"; 
+        ctx.shadowColor = COLORS.gold;
         ctx.fillStyle = COLORS.gold; 
-        ctx.fillText(`BEST ${gameState.highScore}`, canvas.width - 25, 45);
+        ctx.fillText(`BEST: ${gameState.highScore}`, canvas.width - 25, 45);
+        
+        ctx.shadowBlur = 0;
     }
     
     update();
